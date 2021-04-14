@@ -75,13 +75,16 @@ def start_game(dimension, filename="game_gen.txt"):
     while True:
         gen_random_game(dimension, filename)
         game = get_matrix(filename)
+        tic = time.perf_counter()
         winning_path = game.get_winning_path()
         if winning_path:
             print(game.to_string())
             game.generate_path(winning_path)
+            toc = time.perf_counter()
             print(game.to_string())
+            print(toc-tic)
             break
 
 
 if __name__ == '__main__':
-    start_game(30, "game_gen.txt")
+    start_game(130, "game_gen.txt")
