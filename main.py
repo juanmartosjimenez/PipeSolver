@@ -162,7 +162,8 @@ def create_constraints():
 
         if matrix[y][x].type == Type.STRAIGHT:
             # check for surrounding cells and clauses for each situation
-            for jj in range(4):
+            # top cell
+            if game.valid_coord(x)
 
 
 if __name__ == '__main__':
