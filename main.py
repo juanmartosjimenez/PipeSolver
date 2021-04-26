@@ -1,4 +1,5 @@
 import csv
+import math
 import random
 from matrix import Game
 from matrix import Type
@@ -8,6 +9,7 @@ import sys
 import time
 
 sys.setrecursionlimit(10000)
+clauses = []
 
 
 def get_matrix(filename):
@@ -82,9 +84,86 @@ def start_game(dimension, filename="game_gen.txt"):
             game.generate_path(winning_path)
             toc = time.perf_counter()
             print(game.to_string())
-            print(toc-tic)
+            print(toc - tic)
             break
 
 
+# gets the index with the correct number of padded 0's
+def get_index(dim, ii):
+    cells = dim*dim
+    ii = str(ii)
+    return ii.zfill(len(str(cells)))
+
+
+# Each cell in the grid is represented by a single integer i, the function get_coordinates returns the correct x and y
+# value for the given i value based on the size of the grid.
+def get_coordinates(dim, i):
+    x_val = i % dim
+    y_val = math.floor(i / dim)
+
+    return x_val, y_val
+
+
+def create_constraints():
+    dimension = 5  # creates a 3 by 3 game
+    cells = dimension * dimension  # Represents the number of cells in the grid
+    filename = "sat_game.txt"
+    # gen_random_game(dimension, filename)
+    game = get_matrix(filename)
+
+    # ensures that all coordinates in matrix are valid
+    for ii in range(cells):
+        x, y = get_coordinates(dimension, ii)
+        if not game.valid_coord(x, y):
+            raise Exception("Error with matrix creation")
+
+    matrix = game.get_matrix()
+
+    # create constraints to ensure that each cell has one pipe type either ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
+    for ii in range(cells):
+        x, y = get_coordinates(dimension, ii)
+        ii_index = get_index(dimension, ii)
+
+        if matrix[y][x].type == Type.STRAIGHT:
+            # has to be one orientation either 1 or 2
+            clauses.append([ii_index + "1", ii_index + "2"])
+            # can't be both orientations at same time, negation of 1 ^ 2 is -1 ∨ -2
+            clauses.append(["-" + ii_index + "1", "-" + ii_index + "2"])
+        elif matrix[y][x].type == Type.TURN:
+            # has to be either 3, 4, 5, 6
+            clauses.append([ii_index + "3", ii_index + "4", ii_index + "5", ii_index + "6"])
+            # can only be one
+            for jj in range(3, 7):
+                for kk in range(jj + 1, 7):
+                    clauses.append(["-" + ii_index + str(jj), "-" + ii_index + str(kk)])
+        else:
+            raise Exception("Invalid Pipe when creating constraints")
+
+    # create constraints for source pipe
+    if matrix[0][0].type == Type.STRAIGHT:
+        start_index = get_index(dimension, 0)
+        clauses.append([start_index + "2"])
+    elif matrix[0][0].type == Type.TURN:
+        start_index = get_index(dimension, 0)
+        clauses.append([start_index+"6"])
+
+    # create constraints for destination pipe
+    if matrix[dimension-1][dimension-1] == Type.STRAIGHT:
+        start_index = get_index(dimension, cells-1)
+        clauses.append([start_index+"1"])
+    elif matrix[dimension-1][dimension-1].type == Type.TURN:
+        start_index = get_index(dimension, cells-1)
+        clauses.append([start_index+"6"])
+
+    # define interactions between pipes in adjacent cells
+    for ii in range(cells):
+        x, y = get_coordinates(dimension, ii)
+        ii_index = get_index(dimension, ii)
+
+        if matrix[y][x].type == Type.STRAIGHT:
+            # check for surrounding cells and clauses for each situation
+            for jj in range(4):
+
+
 if __name__ == '__main__':
-    start_game(130, "game_gen.txt")
+    create_constraints()
