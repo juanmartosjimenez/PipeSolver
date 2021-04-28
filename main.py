@@ -11,6 +11,7 @@ from pysat.solvers import Glucose4
 
 sys.setrecursionlimit(10000)
 clauses = []
+visited = []
 
 
 def get_matrix(filename):
@@ -55,7 +56,7 @@ def get_matrix(filename):
     return Game(game_matrix)
 
 
-def gen_random_game(size: int, filename: str = "game_gen.txt"):
+def gen_random_game_helper(size: int, filename: str = "game_gen.txt"):
     """
     generates a random game and saves to a file
     :param size: size of the game board
@@ -69,23 +70,25 @@ def gen_random_game(size: int, filename: str = "game_gen.txt"):
         f.write(tmp_str)
 
 
-def solve_algorithm(dimension=5, filename="game_gen.txt"):
+def gen_random_game(dimension=5, filename="game_gen.txt"):
     """
     method starts game
     :param filename: file to be generated
     """
     while True:
-        gen_random_game(dimension, filename)
+        gen_random_game_helper(dimension, filename)
         game = get_matrix(filename)
-        tic = time.perf_counter()
         winning_path = game.get_winning_path()
         if winning_path:
-            print(game.to_string())
-            game.generate_path(winning_path)
-            toc = time.perf_counter()
-            print(game.to_string())
-            print(toc - tic)
             break
+    return game
+
+
+def solve_algorithm(dimension=5, filename="game_gen.txt"):
+    game = get_matrix(filename)
+    winning_path = game.get_winning_path()
+    game.generate_path(winning_path)
+    print(game.to_string())
 
 
 # gets the index with the correct number of padded 0's
@@ -110,8 +113,19 @@ def get_coordinates(dim, i):
 
 
 def parse_solution(game, solution):
+    """
+    generates path in grid from solution returned from the sat solver
+    Parameters
+    ----------
+    game game object
+    solution array containing correct orientations of each pipe
+
+    Returns
+    -------
+
+    """
+    print(solution)
     matrix = game.get_matrix()
-    print(game.to_string())
     for ii, elem in enumerate(solution):
         x, y = get_coordinates(game.col, ii)
         pipe = matrix[y][x]
@@ -137,10 +151,293 @@ def parse_solution(game, solution):
                 raise Exception("straight pipe invalid orientation")
     print(game.to_string())
 
-def sat_helper(game, ii):
+
+def sat_helper(game, ii, entry):
     dimension = game.col
-    cells =
-    pass
+    cells = dimension * dimension
+    matrix = game.get_matrix()
+    x, y = get_coordinates(dimension, ii)
+    acc = []
+    if ii in visited:
+        return
+    visited.append(ii)
+
+    # skip the source and destination to avoid creating unnecessary constraints
+    # if (x == 0 and y == 0) or (ii == cells - 1):
+    #   continue
+
+    ii_index = get_index(dimension, ii)
+
+    if matrix[y][x].type == Type.STRAIGHT:
+        # check for surrounding cells and create clauses for each situation
+
+        # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
+        # first cell
+        if ii == 0:
+            if game.valid_coord(x, y + 1):
+                ii_bottom = get_int_index(dimension, x, y + 1)
+                ii_string_bottom = get_index(dimension, ii_bottom)
+                pipe_bottom = matrix[y + 1][x]
+                if pipe_bottom.type == Type.TURN:
+                    clauses.append([int(ii_string_bottom + "6"), int("-" + ii_index + "2")])
+                elif pipe_bottom.type == Type.STRAIGHT:
+                    clauses.append([int(ii_string_bottom + "2"), int("-" + ii_index + "2")])
+                return [[ii_bottom, 0]]
+
+        # last cell
+        if ii == cells - 1:
+            if game.valid_coord(x - 1, y):
+                return []
+
+        # top cell/bottom cell
+        if (entry == 0 or entry == 2) and game.valid_coord(x, y - 1) and game.valid_coord(x, y + 1):
+            ii_top = get_int_index(dimension, x, y - 1)
+            ii_bottom = get_int_index(dimension, x, y - 1)
+            ii_string_top = get_index(dimension, ii_top)
+            ii_string_bottom = get_index(dimension, ii_bottom)
+
+            pipe_top = matrix[y - 1][x]
+            pipe_bottom = matrix[y + 1][x]
+            # curr2 -> (top3 or top4 or top2) ^ (bottom5 or bottom6 or bottom2)
+            # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
+
+            if entry == 2:
+                acc.append([ii_top, 2])
+                if pipe_top.type == Type.TURN:
+                    clauses.append([int(ii_string_top + "4"), int(ii_string_top + "3"), int("-" + ii_index + "2")])
+                # curr2 -> (top3
+                elif pipe_top.type == Type.STRAIGHT:
+                    clauses.append([int(ii_string_top + "2"), int("-" + ii_index + "2")])
+                else:
+                    raise Exception("unexpected pipe")
+
+            if entry == 0:
+                acc.append([ii_bottom, 0])
+                if pipe_bottom.type == Type.TURN:
+                    clauses.append(
+                        [int(ii_string_bottom + "5"), int(ii_string_bottom + "6"), int("-" + ii_index + "2")])
+                elif pipe_bottom.type == Type.STRAIGHT:
+                    clauses.append([int(ii_string_bottom + "2"), int("-" + ii_index + "2")])
+                else:
+                    raise Exception("unexpected pipe")
+        else:
+            # do nothing for now
+            pass  # TODO
+
+        # right cell/left cell
+        if (entry == 1 or entry == 3) and game.valid_coord(x + 1, y) and game.valid_coord(x - 1, y):
+            ii_right = get_int_index(dimension, x + 1, y)
+            ii_left = get_int_index(dimension, x - 1, y)
+            ii_string_right = get_index(dimension, ii_right)
+            ii_string_left = get_index(dimension, ii_left)
+
+            pipe_left = matrix[y][x - 1]
+            pipe_right = matrix[y][x + 1]
+
+            # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
+
+            if entry == 3:
+                acc.append([ii_right, 3])
+                if pipe_right.type == Type.TURN:
+                    if game.valid_coord(x + 1, y - 1) and game.valid_coord(x + 1, y + 1):
+                        clauses.append(
+                            [int(ii_string_right + "4"), int(ii_string_right + "5"), int("-" + ii_index + "1")])
+                    elif game.valid_coord(x + 1, y - 1):
+                        clauses.append(
+                            [int(ii_string_right + "5"), int("-" + ii_index + "1")])
+                    elif game.valid_coord(x + 1, y + 1):
+                        clauses.append(
+                            [int(ii_string_right + "4"), int("-" + ii_index + "1")])
+
+
+                elif pipe_right.type == Type.STRAIGHT:
+                    clauses.append([int(ii_string_right + "1"), int("-" + ii_index + "1")])
+                else:
+                    raise Exception("unexpected pipe")
+
+            if entry == 1:
+                acc.append([ii_left, 1])
+                if pipe_left.type == Type.TURN:
+                    clauses.append(
+                        [int(ii_string_left + "3"), int(ii_string_left + "6"), int("-" + ii_index + "1")])
+                elif pipe_left.type == Type.STRAIGHT:
+                    clauses.append([int(ii_string_left + "1"), int("-" + ii_index + "1")])
+                else:
+                    raise Exception("unexpected pipe")
+        else:
+            pass  # TODO
+            # if not ((x == 0 and y == 0) or (ii == cells - 1)):
+            # clauses.append([int("-"+ii_index+"1")])
+
+    elif matrix[y][x].type == Type.TURN:
+        # check for surrounding cells and create clauses for each situation
+
+        # first cell
+        if ii == 0:
+            if game.valid_coord(x + 1, y):
+                ii_right = get_int_index(dimension, x + 1, y)
+                ii_string_right = get_index(dimension, ii_right)
+                pipe_right = matrix[y][x + 1]
+                if pipe_right.type == Type.TURN:
+                    clauses.append([int(ii_string_right + "4"), int("-" + ii_index + "6")])
+                elif pipe_right.type == Type.STRAIGHT:
+                    clauses.append([int(ii_string_right + "1"), int("-" + ii_index + "6")])
+                return [[ii_right, 3]]
+
+        # last cell
+        if ii == cells - 1:
+            if game.valid_coord(x, y - 1):
+                ii_top = get_int_index(dimension, x, y - 1)
+                ii_string_top = get_index(dimension, ii_top)
+                pipe_top = matrix[y - 1][x]
+                if pipe_top.type == Type.TURN:
+                    clauses.append([int(ii_string_top + "4"), int("-" + ii_index + "6")])
+                elif pipe_top.type == Type.STRAIGHT:
+                    clauses.append([int(ii_string_top + "2"), int("-" + ii_index + "6")])
+                    pass
+                return [[ii_top, 2]]
+
+        # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
+        # left cell/top cell
+        if (entry == 0 or entry == 3) and game.valid_coord(x, y - 1) and game.valid_coord(x - 1, y):
+            ii_top = get_int_index(dimension, x, y - 1)
+            ii_left = get_int_index(dimension, x - 1, y)
+            ii_string_top = get_index(dimension, ii_top)
+            ii_string_left = get_index(dimension, ii_left)
+
+            pipe_left = matrix[y][x - 1]
+            pipe_top = matrix[y - 1][x]
+            if entry == 3:
+                acc.append([ii_top, 2])
+                if pipe_top.type == Type.STRAIGHT:
+                    clauses.append([int(ii_string_top + "2"), int("-" + ii_index + "5")])
+                elif pipe_top.type == Type.TURN:
+                    clauses.append([int(ii_string_top + "3"), int(ii_string_top + "4"), int("-" + ii_index + "5")])
+                else:
+                    raise Exception("invalid pipe")
+
+            if entry == 0:
+                acc.append([ii_left, 1])
+                if pipe_left.type == Type.STRAIGHT:
+                    clauses.append([int(ii_string_left + "1"), int("-" + ii_index + "5")])
+                elif pipe_left.type == Type.TURN:
+                    clauses.append([int(ii_string_left + "6"), int(ii_string_left + "3"), int("-" + ii_index + "5")])
+                else:
+                    raise Exception("Invalid pipe")
+
+        else:
+            pass  # TODO
+
+        # top cell/right cell
+        if (entry == 0 or entry == 1) and game.valid_coord(x + 1, y) and game.valid_coord(x, y - 1):
+            ii_top = get_int_index(dimension, x, y - 1)
+            ii_right = get_int_index(dimension, x + 1, y)
+            ii_string_top = get_index(dimension, ii_top)
+            ii_string_right = get_index(dimension, ii_right)
+
+            pipe_top = matrix[y - 1][x]
+            pipe_right = matrix[y][x + 1]
+            # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
+            if entry == 1:
+                acc.append([ii_top, 2])
+                if pipe_top.type == Type.STRAIGHT:
+                    clauses.append([int(ii_string_top + "2"), int("-" + ii_index + "6")])
+                elif pipe_top.type == Type.TURN:
+                    clauses.append([int(ii_string_top + "3"), int(ii_string_top + "4"), int("-" + ii_index + "6")])
+                else:
+                    raise Exception("invalid pipe")
+
+            if entry == 0:
+                acc.append([ii_right, 3])
+                if pipe_right.type == Type.STRAIGHT:
+                    clauses.append([int(ii_string_right + "1"), int("-" + ii_index + "6")])
+                elif pipe_right.type == Type.TURN:
+                    clauses.append([int(ii_string_right + "4"), int(ii_string_right + "5"), int("-" + ii_index + "6")])
+                else:
+                    raise Exception("Invalid pipe")
+
+        else:
+            pass  # TODO
+
+        # bottom cell/right cell
+        if (entry == 1 or entry == 2) and game.valid_coord(x, y + 1) and game.valid_coord(x + 1, y):
+            ii_bottom = get_int_index(dimension, x, y + 1)
+            ii_right = get_int_index(dimension, x + 1, y)
+            ii_string_bottom = get_index(dimension, ii_bottom)
+            ii_string_right = get_index(dimension, ii_right)
+
+            pipe_bottom = matrix[y + 1][x]
+            pipe_right = matrix[y][x + 1]
+
+            if entry == 1:
+                # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
+                acc.append([ii_bottom, 0])
+                if pipe_bottom.type == Type.STRAIGHT:
+                    clauses.append([int(ii_string_bottom + "2"), int("-" + ii_index + "3")])
+                elif pipe_bottom.type == Type.TURN:
+                    clauses.append(
+                        [int(ii_string_bottom + "6"), int(ii_string_bottom + "5"), int("-" + ii_index + "3")])
+                else:
+                    raise Exception("invalid pipe")
+
+            if entry == 2:
+                acc.append([ii_right, 3])
+                if pipe_right.type == Type.STRAIGHT:
+                    clauses.append([int(ii_string_right + "1"), int("-" + ii_index + "3")])
+                elif pipe_right.type == Type.TURN:
+
+                    clauses.append([int(ii_string_right + "4"), int(ii_string_right + "5"), int("-" + ii_index + "3")])
+                else:
+                    raise Exception("Invalid pipe")
+
+        else:
+            pass  # TODO
+
+        # left cell/bottom cell
+        if (entry == 3 or entry == 2) and game.valid_coord(x - 1, y) and game.valid_coord(x, y + 1):
+            ii_bottom = get_int_index(dimension, x, y + 1)
+            ii_left = get_int_index(dimension, x - 1, y)
+            ii_string_bottom = get_index(dimension, ii_bottom)
+            ii_string_left = get_index(dimension, ii_left)
+
+            pipe_bottom = matrix[y + 1][x]
+            pipe_left = matrix[y][x - 1]
+
+            # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
+            if entry == 3:
+                acc.append([ii_bottom, 0])
+                if pipe_bottom.type == Type.STRAIGHT:
+                    clauses.append([int(ii_string_bottom + "2"), int("-" + ii_index + "4")])
+                elif pipe_bottom.type == Type.TURN:
+                    if game.valid_coord(x + 1, y + 1) and game.valid_coord(x - 1, y + 1):
+                        clauses.append(
+                            [int(ii_string_bottom + "6"), int(ii_string_bottom + "5"), int("-" + ii_index + "4")])
+                    elif game.valid_coord(x + 1, y + 1):
+                        clauses.append(
+                            [int(ii_string_bottom + "6"), int("-" + ii_index + "4")])
+                    elif game.valid_coord(x - 1, y + 1):
+                        clauses.append(
+                            [int(ii_string_bottom + "5"), int("-" + ii_index + "4")])
+
+                else:
+                    raise Exception("invalid pipe")
+
+            if entry == 2:
+                acc.append([ii_left, 1])
+                if pipe_left.type == Type.STRAIGHT:
+                    clauses.append([int(ii_string_left + "1"), int("-" + ii_index + "4")])
+                elif pipe_left.type == Type.TURN:
+                    clauses.append([int(ii_string_left + "6"), int(ii_string_left + "3"), int("-" + ii_index + "4")])
+                else:
+                    raise Exception("Invalid pipe")
+        else:
+            pass  # TODO
+
+    else:
+        raise Exception("Unexpected pipe type")
+
+    return acc
+
 
 def solve_sat(dimension=5, filename="test.txt"):
     cells = dimension * dimension  # Represents the number of cells in the grid
@@ -195,283 +492,20 @@ def solve_sat(dimension=5, filename="test.txt"):
             for kk in range(jj + 1, 7):
                 clauses.append([int("-" + ii_index + str(jj)), int("-" + ii_index + str(kk))])
 
+    # define interactions between pipes in adjacent cells
+    out = sat_helper(game, 0, 0)
     while True:
-        out = sat_helper(game, 0)
         if not out:
             break
         else:
-            for ii in out:
-                sat_helper(game, ii)
+            for elem in out:
+                print(elem[0])
+                out = sat_helper(game, elem[0], elem[1])
 
-
-    # define interactions between pipes in adjacent cells
-    for ii in range(cells):
-        x, y = get_coordinates(dimension, ii)
-
-        # skip the source and destination to avoid creating unnecessary constraints
-        # if (x == 0 and y == 0) or (ii == cells - 1):
-        #   continue
-
-        ii_index = get_index(dimension, ii)
-
-        if matrix[y][x].type == Type.STRAIGHT:
-            # check for surrounding cells and create clauses for each situation
-
-            # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
-            # first cell
-            if ii == 0:
-                if game.valid_coord(x, y + 1):
-                    ii_bottom = get_int_index(dimension, x, y + 1)
-                    ii_string_bottom = get_index(dimension, ii_bottom)
-                    pipe_bottom = matrix[y + 1][x]
-                    if pipe_bottom.type == Type.TURN:
-                        clauses.append([int(ii_string_bottom + "6"), int("-" + ii_index + "2")])
-                    elif pipe_bottom.type == Type.STRAIGHT:
-                        clauses.append([int(ii_string_bottom + "2"), int("-" + ii_index + "2")])
-                continue
-
-            # last cell
-            if ii == cells - 1:
-                if game.valid_coord(x - 1, y):
-                    ii_left = get_int_index(dimension, x - 1, y)
-                    ii_string_left = get_index(dimension, ii_left)
-                    pipe_left = matrix[y - 1][x]
-                    if pipe_left.type == Type.TURN:
-                        clauses.append([int(ii_string_left + "6"), int("-" + ii_index + "1")])
-                    elif pipe_left.type == Type.STRAIGHT:
-                        clauses.append([int(ii_string_left + "1"), int("-" + ii_index + "1")])
-                        pass
-                continue
-
-            # top cell/bottom cell
-            if game.valid_coord(x, y - 1) and game.valid_coord(x, y + 1):
-                ii_top = get_int_index(dimension, x, y - 1)
-                ii_bottom = get_int_index(dimension, x, y - 1)
-                ii_string_top = get_index(dimension, ii_top)
-                ii_string_bottom = get_index(dimension, ii_bottom)
-
-                pipe_top = matrix[y - 1][x]
-                pipe_bottom = matrix[y + 1][x]
-                # curr2 -> (top3 or top4 or top2) ^ (bottom5 or bottom6 or bottom2)
-                # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
-
-                if pipe_top.type == Type.TURN:
-                    clauses.append([int(ii_string_top + "4"), int(ii_string_top + "3"), int("-" + ii_index + "2")])
-                # curr2 -> (top3
-                elif pipe_top.type == Type.STRAIGHT:
-                    clauses.append([int(ii_string_top + "2"), int("-" + ii_index + "2")])
-                else:
-                    raise Exception("unexpected pipe")
-
-                if pipe_bottom.type == Type.TURN:
-                    clauses.append(
-                        [int(ii_string_bottom + "5"), int(ii_string_bottom + "6"), int("-" + ii_index + "2")])
-                elif pipe_bottom.type == Type.STRAIGHT:
-                    clauses.append([int(ii_string_bottom + "2"), int("-" + ii_index + "2")])
-                else:
-                    raise Exception("unexpected pipe")
-            else:
-                # do nothing for now
-                pass  # TODO
-
-            # right cell/left cell
-            if game.valid_coord(x + 1, y) and game.valid_coord(x - 1, y):
-                ii_right = get_int_index(dimension, x + 1, y)
-                ii_left = get_int_index(dimension, x - 1, y)
-                ii_string_right = get_index(dimension, ii_right)
-                ii_string_left = get_index(dimension, ii_left)
-
-                pipe_left = matrix[y][x - 1]
-                pipe_right = matrix[y][x + 1]
-
-                # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
-
-                if pipe_right.type == Type.TURN:
-                    if game.valid_coord(x + 1, y - 1) and game.valid_coord(x + 1, y + 1):
-                        clauses.append(
-                            [int(ii_string_right + "4"), int(ii_string_right + "5"), int("-" + ii_index + "1")])
-                    elif game.valid_coord(x + 1, y - 1):
-                        clauses.append(
-                            [int(ii_string_right + "5"), int("-" + ii_index + "1")])
-                    elif game.valid_coord(x + 1, y + 1):
-                        clauses.append(
-                            [int(ii_string_right + "4"), int("-" + ii_index + "1")])
-
-
-                elif pipe_right.type == Type.STRAIGHT:
-                    clauses.append([int(ii_string_right + "1"), int("-" + ii_index + "1")])
-                else:
-                    raise Exception("unexpected pipe")
-
-                if pipe_left.type == Type.TURN:
-                    clauses.append(
-                        [int(ii_string_left + "3"), int(ii_string_left + "6"), int("-" + ii_index + "1")])
-                elif pipe_left.type == Type.STRAIGHT:
-                    clauses.append([int(ii_string_left + "1"), int("-" + ii_index + "1")])
-                else:
-                    raise Exception("unexpected pipe")
-            else:
-                pass  # TODO
-                # if not ((x == 0 and y == 0) or (ii == cells - 1)):
-                # clauses.append([int("-"+ii_index+"1")])
-
-        elif matrix[y][x].type == Type.TURN:
-            # check for surrounding cells and create clauses for each situation
-
-            # first cell
-            if ii == 0:
-                if game.valid_coord(x + 1, y):
-                    ii_right = get_int_index(dimension, x + 1, y)
-                    ii_string_right = get_index(dimension, ii_right)
-                    pipe_right = matrix[y][x + 1]
-                    if pipe_right.type == Type.TURN:
-                        clauses.append([int(ii_string_right + "4"), int("-" + ii_index + "6")])
-                    elif pipe_right.type == Type.STRAIGHT:
-                        clauses.append([int(ii_string_right + "1"), int("-" + ii_index + "6")])
-                continue
-
-            # last cell
-            if ii == cells - 1:
-                if game.valid_coord(x, y - 1):
-                    ii_top = get_int_index(dimension, x, y - 1)
-                    ii_string_top = get_index(dimension, ii_top)
-                    pipe_top = matrix[y - 1][x]
-                    if pipe_top.type == Type.TURN:
-                        clauses.append([int(ii_string_top + "4"), int("-" + ii_index + "6")])
-                    elif pipe_top.type == Type.STRAIGHT:
-                        clauses.append([int(ii_string_top + "2"), int("-" + ii_index + "6")])
-                        pass
-                continue
-
-            # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
-            # left cell/top cell
-            if game.valid_coord(x, y - 1) and game.valid_coord(x - 1, y):
-                ii_top = get_int_index(dimension, x, y - 1)
-                ii_left = get_int_index(dimension, x - 1, y)
-                ii_string_top = get_index(dimension, ii_top)
-                ii_string_left = get_index(dimension, ii_left)
-
-                pipe_left = matrix[y][x - 1]
-                pipe_top = matrix[y - 1][x]
-
-                if pipe_top.type == Type.STRAIGHT:
-                    clauses.append([int(ii_string_top + "2"), int("-" + ii_index + "5")])
-                elif pipe_top.type == Type.TURN:
-                    clauses.append([int(ii_string_top + "3"), int(ii_string_top + "4"), int("-" + ii_index + "5")])
-                else:
-                    raise Exception("invalid pipe")
-
-                if pipe_left.type == Type.STRAIGHT:
-                    clauses.append([int(ii_string_left + "1"), int("-" + ii_index + "5")])
-                elif pipe_left.type == Type.TURN:
-                    clauses.append([int(ii_string_left + "6"), int(ii_string_left + "3"), int("-" + ii_index + "5")])
-                else:
-                    raise Exception("Invalid pipe")
-
-            else:
-                pass  # TODO
-
-            # top cell/right cell
-            if game.valid_coord(x + 1, y) and game.valid_coord(x, y - 1):
-                ii_top = get_int_index(dimension, x, y - 1)
-                ii_right = get_int_index(dimension, x + 1, y)
-                ii_string_top = get_index(dimension, ii_top)
-                ii_string_right = get_index(dimension, ii_right)
-
-                pipe_top = matrix[y - 1][x]
-                pipe_right = matrix[y][x + 1]
-                # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
-                if pipe_top.type == Type.STRAIGHT:
-                    clauses.append([int(ii_string_top + "2"), int("-" + ii_index + "6")])
-                elif pipe_top.type == Type.TURN:
-                    clauses.append([int(ii_string_top + "3"), int(ii_string_top + "4"), int("-" + ii_index + "6")])
-                else:
-                    raise Exception("invalid pipe")
-
-                if pipe_right.type == Type.STRAIGHT:
-                    clauses.append([int(ii_string_right + "1"), int("-" + ii_index + "6")])
-                elif pipe_right.type == Type.TURN:
-                    clauses.append([int(ii_string_right + "4"), int(ii_string_right + "5"), int("-" + ii_index + "6")])
-                else:
-                    raise Exception("Invalid pipe")
-
-            else:
-                pass  # TODO
-
-            # bottom cell/right cell
-            if game.valid_coord(x, y + 1) and game.valid_coord(x + 1, y):
-                ii_bottom = get_int_index(dimension, x, y + 1)
-                ii_right = get_int_index(dimension, x + 1, y)
-                ii_string_bottom = get_index(dimension, ii_bottom)
-                ii_string_right = get_index(dimension, ii_right)
-
-                pipe_bottom = matrix[y + 1][x]
-                pipe_right = matrix[y][x + 1]
-
-                # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
-                if pipe_bottom.type == Type.STRAIGHT:
-                    clauses.append([int(ii_string_bottom + "2"), int("-" + ii_index + "3")])
-                elif pipe_bottom.type == Type.TURN:
-                    clauses.append(
-                        [int(ii_string_bottom + "6"), int(ii_string_bottom + "5"), int("-" + ii_index + "3")])
-                else:
-                    raise Exception("invalid pipe")
-
-                if pipe_right.type == Type.STRAIGHT:
-                    clauses.append([int(ii_string_right + "1"), int("-" + ii_index + "3")])
-                elif pipe_right.type == Type.TURN:
-
-                    clauses.append([int(ii_string_right + "4"), int(ii_string_right + "5"), int("-" + ii_index + "3")])
-                else:
-                    raise Exception("Invalid pipe")
-
-            else:
-                pass  # TODO
-
-            # left cell/bottom cell
-            if game.valid_coord(x - 1, y) and game.valid_coord(x, y + 1):
-                ii_bottom = get_int_index(dimension, x, y + 1)
-                ii_left = get_int_index(dimension, x - 1, y)
-                ii_string_bottom = get_index(dimension, ii_bottom)
-                ii_string_left = get_index(dimension, ii_left)
-
-                pipe_bottom = matrix[y + 1][x]
-                pipe_left = matrix[y][x - 1]
-
-                # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
-                if pipe_bottom.type == Type.STRAIGHT:
-                    clauses.append([int(ii_string_bottom + "2"), int("-" + ii_index + "4")])
-                elif pipe_bottom.type == Type.TURN:
-                    if game.valid_coord(x + 1, y + 1) and game.valid_coord(x - 1, y + 1):
-                        clauses.append(
-                            [int(ii_string_bottom + "6"), int(ii_string_bottom + "5"), int("-" + ii_index + "4")])
-                    elif game.valid_coord(x + 1, y + 1):
-                        clauses.append(
-                            [int(ii_string_bottom + "6"), int("-" + ii_index + "1")])
-                    elif game.valid_coord(x - 1, y + 1):
-                        print("herdfdse")
-                        clauses.append(
-                            [int(ii_string_bottom + "5"), int("-" + ii_index + "1")])
-
-                else:
-                    raise Exception("invalid pipe")
-
-                if pipe_left.type == Type.STRAIGHT:
-                    clauses.append([int(ii_string_left + "1"), int("-" + ii_index + "4")])
-                elif pipe_left.type == Type.TURN:
-                    print(ii_string_left)
-                    clauses.append([int(ii_string_left + "6"), int(ii_string_left + "3"), int("-" + ii_index + "4")])
-                else:
-                    raise Exception("Invalid pipe")
-            else:
-                pass  # TODO
-
-        else:
-            raise Exception("Unexpected pipe type")
     g = Glucose4()
     [g.add_clause(elem) for elem in clauses]
 
-    print(g.solve())
+    g.solve()
 
     try:
         solution = g.get_model()
@@ -479,15 +513,24 @@ def solve_sat(dimension=5, filename="test.txt"):
         for elem in solution:
             if elem >= 0:
                 pos_sol.append(elem)
-        print(pos_sol)
         parse_solution(game, pos_sol)
-    except Exception as e:
-        pass
+    except TypeError as e:
+        print("No solution found via sat")
 
     return game
 
 
+def main():
+    dim = 4
+    print("original game board:")
+    print(gen_random_game(dim, "test.txt").to_string())
+    print("solution via algorithm:")
+    solve_algorithm(dim, "test.txt")
+    print("solution via sat solver:")
+    solve_sat(dim, "test.txt")
+    clauses.reverse()
+    print(clauses)
+
+
 if __name__ == '__main__':
-    dim = 50
-    solve_algorithm(50, "test.txt")
-    solve_sat(50, "test.txt")
+    main()
