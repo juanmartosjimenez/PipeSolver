@@ -124,7 +124,6 @@ def parse_solution(game, solution):
     -------
 
     """
-    print(solution)
     matrix = game.get_matrix()
     for ii, elem in enumerate(solution):
         x, y = get_coordinates(game.col, ii)
@@ -178,6 +177,7 @@ def sat_helper(game, ii, entry):
                 ii_bottom = get_int_index(dimension, x, y + 1)
                 ii_string_bottom = get_index(dimension, ii_bottom)
                 pipe_bottom = matrix[y + 1][x]
+                sat_helper(game, ii_bottom, 0)
                 if pipe_bottom.type == Type.TURN:
                     clauses.append([int(ii_string_bottom + "6"), int("-" + ii_index + "2")])
                 elif pipe_bottom.type == Type.STRAIGHT:
@@ -202,6 +202,7 @@ def sat_helper(game, ii, entry):
             # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
 
             if entry == 2:
+                sat_helper(game, ii_top, 2)
                 acc.append([ii_top, 2])
                 if pipe_top.type == Type.TURN:
                     clauses.append([int(ii_string_top + "4"), int(ii_string_top + "3"), int("-" + ii_index + "2")])
@@ -212,6 +213,7 @@ def sat_helper(game, ii, entry):
                     raise Exception("unexpected pipe")
 
             if entry == 0:
+                sat_helper(game, ii_bottom, 0)
                 acc.append([ii_bottom, 0])
                 if pipe_bottom.type == Type.TURN:
                     clauses.append(
@@ -237,6 +239,7 @@ def sat_helper(game, ii, entry):
             # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
 
             if entry == 3:
+                sat_helper(game, ii_right, 3)
                 acc.append([ii_right, 3])
                 if pipe_right.type == Type.TURN:
                     if game.valid_coord(x + 1, y - 1) and game.valid_coord(x + 1, y + 1):
@@ -256,6 +259,7 @@ def sat_helper(game, ii, entry):
                     raise Exception("unexpected pipe")
 
             if entry == 1:
+                sat_helper(game, ii_left, 1)
                 acc.append([ii_left, 1])
                 if pipe_left.type == Type.TURN:
                     clauses.append(
@@ -278,6 +282,7 @@ def sat_helper(game, ii, entry):
                 ii_right = get_int_index(dimension, x + 1, y)
                 ii_string_right = get_index(dimension, ii_right)
                 pipe_right = matrix[y][x + 1]
+                sat_helper(game, ii_right, 3)
                 if pipe_right.type == Type.TURN:
                     clauses.append([int(ii_string_right + "4"), int("-" + ii_index + "6")])
                 elif pipe_right.type == Type.STRAIGHT:
@@ -308,6 +313,7 @@ def sat_helper(game, ii, entry):
             pipe_left = matrix[y][x - 1]
             pipe_top = matrix[y - 1][x]
             if entry == 3:
+                sat_helper(game, ii_top, 2)
                 acc.append([ii_top, 2])
                 if pipe_top.type == Type.STRAIGHT:
                     clauses.append([int(ii_string_top + "2"), int("-" + ii_index + "5")])
@@ -317,6 +323,7 @@ def sat_helper(game, ii, entry):
                     raise Exception("invalid pipe")
 
             if entry == 0:
+                sat_helper(game, ii_left, 1)
                 acc.append([ii_left, 1])
                 if pipe_left.type == Type.STRAIGHT:
                     clauses.append([int(ii_string_left + "1"), int("-" + ii_index + "5")])
@@ -339,6 +346,7 @@ def sat_helper(game, ii, entry):
             pipe_right = matrix[y][x + 1]
             # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
             if entry == 1:
+                sat_helper(game, ii_top, 2)
                 acc.append([ii_top, 2])
                 if pipe_top.type == Type.STRAIGHT:
                     clauses.append([int(ii_string_top + "2"), int("-" + ii_index + "6")])
@@ -348,6 +356,7 @@ def sat_helper(game, ii, entry):
                     raise Exception("invalid pipe")
 
             if entry == 0:
+                sat_helper(game, ii_right, 3)
                 acc.append([ii_right, 3])
                 if pipe_right.type == Type.STRAIGHT:
                     clauses.append([int(ii_string_right + "1"), int("-" + ii_index + "6")])
@@ -371,6 +380,7 @@ def sat_helper(game, ii, entry):
 
             if entry == 1:
                 # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
+                sat_helper(game, ii_bottom, 0)
                 acc.append([ii_bottom, 0])
                 if pipe_bottom.type == Type.STRAIGHT:
                     clauses.append([int(ii_string_bottom + "2"), int("-" + ii_index + "3")])
@@ -381,6 +391,7 @@ def sat_helper(game, ii, entry):
                     raise Exception("invalid pipe")
 
             if entry == 2:
+                sat_helper(game, ii_right, 3)
                 acc.append([ii_right, 3])
                 if pipe_right.type == Type.STRAIGHT:
                     clauses.append([int(ii_string_right + "1"), int("-" + ii_index + "3")])
@@ -405,6 +416,7 @@ def sat_helper(game, ii, entry):
 
             # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
             if entry == 3:
+                sat_helper(game, ii_bottom, 0)
                 acc.append([ii_bottom, 0])
                 if pipe_bottom.type == Type.STRAIGHT:
                     clauses.append([int(ii_string_bottom + "2"), int("-" + ii_index + "4")])
@@ -423,6 +435,7 @@ def sat_helper(game, ii, entry):
                     raise Exception("invalid pipe")
 
             if entry == 2:
+                sat_helper(game, ii_left, 1)
                 acc.append([ii_left, 1])
                 if pipe_left.type == Type.STRAIGHT:
                     clauses.append([int(ii_string_left + "1"), int("-" + ii_index + "4")])
@@ -493,14 +506,7 @@ def solve_sat(dimension=5, filename="test.txt"):
                 clauses.append([int("-" + ii_index + str(jj)), int("-" + ii_index + str(kk))])
 
     # define interactions between pipes in adjacent cells
-    out = sat_helper(game, 0, 0)
-    while True:
-        if not out:
-            break
-        else:
-            for elem in out:
-                print(elem[0])
-                out = sat_helper(game, elem[0], elem[1])
+    sat_helper(game, 0, 0)
 
     g = Glucose4()
     [g.add_clause(elem) for elem in clauses]
@@ -521,15 +527,13 @@ def solve_sat(dimension=5, filename="test.txt"):
 
 
 def main():
-    dim = 4
+    dim = 10
     print("original game board:")
     print(gen_random_game(dim, "test.txt").to_string())
     print("solution via algorithm:")
     solve_algorithm(dim, "test.txt")
     print("solution via sat solver:")
     solve_sat(dim, "test.txt")
-    clauses.reverse()
-    print(clauses)
 
 
 if __name__ == '__main__':
