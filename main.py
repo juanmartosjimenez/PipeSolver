@@ -527,13 +527,25 @@ def solve_sat(dimension=5, filename="test.txt"):
 
 
 def main():
-    dim = 10
+    while True:
+        dim = input("input dimension for game board to be generated between 1 to 100\n")
+        try:
+            dim = int(dim)
+            if 0 >= dim  or dim > 100:
+                print("pleasure input valid dimension")
+                continue
+            else:
+                break
+        except ValueError as e:
+            print("Please make sure dimension is positive integer")
+
     print("original game board:")
     print(gen_random_game(dim, "test.txt").to_string())
     print("solution via algorithm:")
     solve_algorithm(dim, "test.txt")
     print("solution via sat solver:")
     solve_sat(dim, "test.txt")
+
 
 
 if __name__ == '__main__':
