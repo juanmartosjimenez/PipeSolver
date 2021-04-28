@@ -75,7 +75,7 @@ def solve_algorithm(dimension=5, filename="game_gen.txt"):
     :param filename: file to be generated
     """
     while True:
-        # gen_random_game(dimension, filename)
+        gen_random_game(dimension, filename)
         game = get_matrix(filename)
         tic = time.perf_counter()
         winning_path = game.get_winning_path()
@@ -137,6 +137,10 @@ def parse_solution(game, solution):
                 raise Exception("straight pipe invalid orientation")
     print(game.to_string())
 
+def sat_helper(game, ii):
+    dimension = game.col
+    cells =
+    pass
 
 def solve_sat(dimension=5, filename="test.txt"):
     cells = dimension * dimension  # Represents the number of cells in the grid
@@ -153,6 +157,22 @@ def solve_sat(dimension=5, filename="test.txt"):
             raise Exception("Error with matrix creation")
 
     matrix = game.get_matrix()
+
+    # create constraints for source pipe
+    if matrix[0][0].type == Type.STRAIGHT:
+        start_index = get_index(dimension, 0)
+        clauses.append([int(start_index + "2")])
+    elif matrix[0][0].type == Type.TURN:
+        start_index = get_index(dimension, 0)
+        clauses.append([int(start_index + "6")])
+
+    # create constraints for destination pipe
+    if matrix[dimension - 1][dimension - 1].type == Type.STRAIGHT:
+        start_index = get_index(dimension, cells - 1)
+        clauses.append([int(start_index + "1")])
+    elif matrix[dimension - 1][dimension - 1].type == Type.TURN:
+        start_index = get_index(dimension, cells - 1)
+        clauses.append([int(start_index + "6")])
 
     # create constraints to ensure that each cell has one pipe type either ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
     for ii in range(cells):
@@ -175,21 +195,14 @@ def solve_sat(dimension=5, filename="test.txt"):
             for kk in range(jj + 1, 7):
                 clauses.append([int("-" + ii_index + str(jj)), int("-" + ii_index + str(kk))])
 
-    # create constraints for source pipe
-    if matrix[0][0].type == Type.STRAIGHT:
-        start_index = get_index(dimension, 0)
-        clauses.append([int(start_index + "2")])
-    elif matrix[0][0].type == Type.TURN:
-        start_index = get_index(dimension, 0)
-        clauses.append([int(start_index + "6")])
+    while True:
+        out = sat_helper(game, 0)
+        if not out:
+            break
+        else:
+            for ii in out:
+                sat_helper(game, ii)
 
-    # create constraints for destination pipe
-    if matrix[dimension - 1][dimension - 1] == Type.STRAIGHT:
-        start_index = get_index(dimension, cells - 1)
-        clauses.append([int(start_index + "1")])
-    elif matrix[dimension - 1][dimension - 1].type == Type.TURN:
-        start_index = get_index(dimension, cells - 1)
-        clauses.append([int(start_index + "6")])
 
     # define interactions between pipes in adjacent cells
     for ii in range(cells):
@@ -207,26 +220,26 @@ def solve_sat(dimension=5, filename="test.txt"):
             # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
             # first cell
             if ii == 0:
-                if game.valid_coord(x, y+1):
-                    ii_bottom = get_int_index(dimension, x, y+1)
+                if game.valid_coord(x, y + 1):
+                    ii_bottom = get_int_index(dimension, x, y + 1)
                     ii_string_bottom = get_index(dimension, ii_bottom)
-                    pipe_bottom = matrix[y+1][x]
+                    pipe_bottom = matrix[y + 1][x]
                     if pipe_bottom.type == Type.TURN:
-                        clauses.append([int(ii_string_bottom+"6"),int("-"+ii_index+"2")])
+                        clauses.append([int(ii_string_bottom + "6"), int("-" + ii_index + "2")])
                     elif pipe_bottom.type == Type.STRAIGHT:
-                        clauses.append([int(ii_string_bottom+"2"),int("-"+ii_index+"2")])
+                        clauses.append([int(ii_string_bottom + "2"), int("-" + ii_index + "2")])
                 continue
 
             # last cell
             if ii == cells - 1:
                 if game.valid_coord(x - 1, y):
-                    ii_left = get_int_index(dimension, x-1, y)
+                    ii_left = get_int_index(dimension, x - 1, y)
                     ii_string_left = get_index(dimension, ii_left)
-                    pipe_left= matrix[y-1][x]
+                    pipe_left = matrix[y - 1][x]
                     if pipe_left.type == Type.TURN:
-                        clauses.append([int(ii_string_left+"6"),int("-"+ii_index+"1")])
+                        clauses.append([int(ii_string_left + "6"), int("-" + ii_index + "1")])
                     elif pipe_left.type == Type.STRAIGHT:
-                        clauses.append([int(ii_string_left+"1"),int("-"+ii_index+"1")])
+                        clauses.append([int(ii_string_left + "1"), int("-" + ii_index + "1")])
                         pass
                 continue
 
@@ -259,7 +272,7 @@ def solve_sat(dimension=5, filename="test.txt"):
                     raise Exception("unexpected pipe")
             else:
                 # do nothing for now
-                pass #TODO
+                pass  # TODO
 
             # right cell/left cell
             if game.valid_coord(x + 1, y) and game.valid_coord(x - 1, y):
@@ -274,10 +287,10 @@ def solve_sat(dimension=5, filename="test.txt"):
                 # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
 
                 if pipe_right.type == Type.TURN:
-                    if game.valid_coord(x+1, y-1) and game.valid_coord(x+1, y+1):
+                    if game.valid_coord(x + 1, y - 1) and game.valid_coord(x + 1, y + 1):
                         clauses.append(
                             [int(ii_string_right + "4"), int(ii_string_right + "5"), int("-" + ii_index + "1")])
-                    elif game.valid_coord(x+1, y-1):
+                    elif game.valid_coord(x + 1, y - 1):
                         clauses.append(
                             [int(ii_string_right + "5"), int("-" + ii_index + "1")])
                     elif game.valid_coord(x + 1, y + 1):
@@ -299,8 +312,8 @@ def solve_sat(dimension=5, filename="test.txt"):
                     raise Exception("unexpected pipe")
             else:
                 pass  # TODO
-                #if not ((x == 0 and y == 0) or (ii == cells - 1)):
-                    # clauses.append([int("-"+ii_index+"1")])
+                # if not ((x == 0 and y == 0) or (ii == cells - 1)):
+                # clauses.append([int("-"+ii_index+"1")])
 
         elif matrix[y][x].type == Type.TURN:
             # check for surrounding cells and create clauses for each situation
@@ -312,24 +325,23 @@ def solve_sat(dimension=5, filename="test.txt"):
                     ii_string_right = get_index(dimension, ii_right)
                     pipe_right = matrix[y][x + 1]
                     if pipe_right.type == Type.TURN:
-                        clauses.append([int(ii_string_right+"4"),int("-"+ii_index+"6")])
+                        clauses.append([int(ii_string_right + "4"), int("-" + ii_index + "6")])
                     elif pipe_right.type == Type.STRAIGHT:
-                        clauses.append([int(ii_string_right+"1"),int("-"+ii_index+"6")])
+                        clauses.append([int(ii_string_right + "1"), int("-" + ii_index + "6")])
                 continue
 
             # last cell
             if ii == cells - 1:
-                if game.valid_coord(x, y-1):
+                if game.valid_coord(x, y - 1):
                     ii_top = get_int_index(dimension, x, y - 1)
                     ii_string_top = get_index(dimension, ii_top)
-                    pipe_top = matrix[y-1][x]
+                    pipe_top = matrix[y - 1][x]
                     if pipe_top.type == Type.TURN:
-                        clauses.append([int(ii_string_top+"4"),int("-"+ii_index+"6")])
+                        clauses.append([int(ii_string_top + "4"), int("-" + ii_index + "6")])
                     elif pipe_top.type == Type.STRAIGHT:
-                        clauses.append([int(ii_string_top+"2"),int("-"+ii_index+"6")])
+                        clauses.append([int(ii_string_top + "2"), int("-" + ii_index + "6")])
                         pass
                 continue
-
 
             # ═:1 ║:2 ╔:3 ╗:4 ╝:5 ╚:6
             # left cell/top cell
@@ -357,7 +369,7 @@ def solve_sat(dimension=5, filename="test.txt"):
                     raise Exception("Invalid pipe")
 
             else:
-                pass #TODO
+                pass  # TODO
 
             # top cell/right cell
             if game.valid_coord(x + 1, y) and game.valid_coord(x, y - 1):
@@ -384,8 +396,7 @@ def solve_sat(dimension=5, filename="test.txt"):
                     raise Exception("Invalid pipe")
 
             else:
-                pass #TODO
-
+                pass  # TODO
 
             # bottom cell/right cell
             if game.valid_coord(x, y + 1) and game.valid_coord(x + 1, y):
@@ -409,12 +420,13 @@ def solve_sat(dimension=5, filename="test.txt"):
                 if pipe_right.type == Type.STRAIGHT:
                     clauses.append([int(ii_string_right + "1"), int("-" + ii_index + "3")])
                 elif pipe_right.type == Type.TURN:
+
                     clauses.append([int(ii_string_right + "4"), int(ii_string_right + "5"), int("-" + ii_index + "3")])
                 else:
                     raise Exception("Invalid pipe")
 
             else:
-                pass #TODO
+                pass  # TODO
 
             # left cell/bottom cell
             if game.valid_coord(x - 1, y) and game.valid_coord(x, y + 1):
@@ -430,15 +442,16 @@ def solve_sat(dimension=5, filename="test.txt"):
                 if pipe_bottom.type == Type.STRAIGHT:
                     clauses.append([int(ii_string_bottom + "2"), int("-" + ii_index + "4")])
                 elif pipe_bottom.type == Type.TURN:
-                    if game.valid_coord(x+1, y+1) and game.valid_coord(x-1, y+1):
+                    if game.valid_coord(x + 1, y + 1) and game.valid_coord(x - 1, y + 1):
                         clauses.append(
                             [int(ii_string_bottom + "6"), int(ii_string_bottom + "5"), int("-" + ii_index + "4")])
-                    elif game.valid_coord(x+1, y+1):
+                    elif game.valid_coord(x + 1, y + 1):
                         clauses.append(
-                            [int(ii_string_bottom+ "5"), int("-" + ii_index + "1")])
+                            [int(ii_string_bottom + "6"), int("-" + ii_index + "1")])
                     elif game.valid_coord(x - 1, y + 1):
+                        print("herdfdse")
                         clauses.append(
-                            [int(ii_string_bottom+ "4"), int("-" + ii_index + "1")])
+                            [int(ii_string_bottom + "5"), int("-" + ii_index + "1")])
 
                 else:
                     raise Exception("invalid pipe")
@@ -451,7 +464,7 @@ def solve_sat(dimension=5, filename="test.txt"):
                 else:
                     raise Exception("Invalid pipe")
             else:
-                pass #TODO
+                pass  # TODO
 
         else:
             raise Exception("Unexpected pipe type")
@@ -459,7 +472,6 @@ def solve_sat(dimension=5, filename="test.txt"):
     [g.add_clause(elem) for elem in clauses]
 
     print(g.solve())
-    print(clauses)
 
     try:
         solution = g.get_model()
@@ -469,14 +481,13 @@ def solve_sat(dimension=5, filename="test.txt"):
                 pos_sol.append(elem)
         print(pos_sol)
         parse_solution(game, pos_sol)
-    except:
+    except Exception as e:
         pass
-
-
 
     return game
 
 
 if __name__ == '__main__':
-    solve_algorithm(4, "test.txt")
-    solve_sat(4, "test.txt")
+    dim = 50
+    solve_algorithm(50, "test.txt")
+    solve_sat(50, "test.txt")
