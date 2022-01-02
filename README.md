@@ -25,4 +25,4 @@ A sample 30x30 board generated can be seen below.
 ![Sample Board Generated](images/30x30.png?raw=true "Randomly Generated 30x30 Board")
 
 A sample solution for the board above determined via SAT reduction can be seen below.
-![Sample Solution for Board](images/30x30Solution.png?raw=true "Solution Via SAT Reduction for 30x30 Board")
+![Sample Solution for Board](images/30x30solution.png?raw=true "Solution Via SAT Reduction for 30x30 Board")
