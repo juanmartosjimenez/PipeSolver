@@ -1,7 +1,5 @@
 # PipeSolver
 
-To use this repository, clone it, install PySat and termcolor, and run main.py. The only input necessary is the dimensions of the grid.
-
 PipeSolver is an engine that determines the solution of a pipe game via SAT reduction. A pipe game is a grid filled with pipes, a pipe is either straight or right angled, a pipe can be rotated four different ways. To solve the pipe game, the pipes must be connected so that water can flow from top right grid square to the bottom left grid square.
 
 ## What is a SAT Reduction Problem?
