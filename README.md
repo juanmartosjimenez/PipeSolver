@@ -22,7 +22,7 @@ These constraints are created for every cell in the grid. The constraints are jo
 
 A sample 30x30 board generated can be seen below.
 
-![Sample Board Generated](PipeSolver/images/30x30.jpg?raw=true "Randomly Generated 30x30 Board")
+![Sample Board Generated](PipeSolver/blob/main/images/30x30.png?raw=true "Randomly Generated 30x30 Board")
 
 A sample solution for the board above determined via SAT reduction can be seen below.
-![Sample Solution for Board](PipeSolver/images/30x30Solution.jpg "Solution Via SAT Reduction for 30x30 Board")
+![Sample Solution for Board](PipeSolver/blob/main/images/30x30Solution.png?raw=true "Solution Via SAT Reduction for 30x30 Board")
